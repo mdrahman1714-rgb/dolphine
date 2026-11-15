@@ -89,7 +89,7 @@ function seedState() {
       { id: 'seed-ruble', investor: 'ruble', amount: 3333.34, date: START_DATE, note: 'Deposit (€10,000 split equally)' }
     ].map((c) => ({ ...c, updatedBy: 'Sam', updatedAt: now })),
     log: [
-      { at: now, by: 'Portal', action: 'Portal opened', detail: 'Day-one sheet (14/11/2026) and €10,000 deposit added.' }
+      { at: now, by: 'Sam', action: 'Portal opened', detail: 'Day-one sheet (14/11/2026) and €10,000 deposit added.' }
     ]
   };
 }
@@ -337,6 +337,8 @@ async function sheetsRoute(req, method, date, member) {
     if (!body) return json({ error: 'Send the sheet as JSON.' }, 400);
     const before = state.sheets[date];
     const sheet = cleanSheet(date, body, member);
+    sheet.createdBy = before ? before.createdBy || before.updatedBy : member.name;
+    sheet.createdAt = before ? before.createdAt || before.updatedAt : sheet.updatedAt;
     const changes = before ? sheetChanges(before, sheet) : [];
     if (before && !changes.length) return json(state); // nothing actually changed
     state.sheets[date] = sheet;
@@ -380,7 +382,10 @@ async function investmentsRoute(req, method, id, member) {
       updatedBy: member.name,
       updatedAt: new Date().toISOString()
     };
-    const changes = idx >= 0 ? investmentChanges(state.investments[idx], entry) : [];
+    const prev = idx >= 0 ? state.investments[idx] : null;
+    entry.createdBy = prev ? prev.createdBy || prev.updatedBy : member.name;
+    entry.createdAt = prev ? prev.createdAt || prev.updatedAt : entry.updatedAt;
+    const changes = prev ? investmentChanges(prev, entry) : [];
     if (idx >= 0 && !changes.length) return json(state);
     if (idx >= 0) state.investments[idx] = entry;
     else state.investments.push(entry);

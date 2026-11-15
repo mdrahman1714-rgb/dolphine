@@ -191,7 +191,11 @@
         <div>
           <p class="print-only print-title">Halal Meat Shop — Daily Balance Sheet</p>
           <h3>${longDate(s.date)}</h3>
-          <p class="muted small">Last updated by <b style="color:${colorOf(s.updatedBy)}">${esc(s.updatedBy)}</b> · ${when(s.updatedAt)}</p>
+          <p class="who-line small">
+            ${s.createdBy && (s.createdBy !== s.updatedBy || s.createdAt !== s.updatedAt) ? `<span class="pill" style="--c:${colorOf(s.createdBy)}">➕ Added by ${esc(s.createdBy)}</span>` : ''}
+            <span class="pill" style="--c:${colorOf(s.updatedBy)}">✏️ ${s.createdBy && s.createdAt !== s.updatedAt ? 'Last changed' : 'Added'} by ${esc(s.updatedBy)}</span>
+            <span class="muted">${when(s.updatedAt)}</span>
+          </p>
         </div>
         <div class="sheet-actions no-print">
           <button class="btn btn-ghost btn-sm" id="edit-sheet">✏️ Edit</button>
@@ -378,7 +382,7 @@
         <tr>
           <td>${niceDate(c.date)}</td>
           <td><span class="pill" style="--c:${colorOf(c.investor)}">${name(c.investor)}</span></td>
-          <td>${esc(c.note)}<div class="muted tiny">by ${esc(c.updatedBy)} · ${when(c.updatedAt)}</div></td>
+          <td>${esc(c.note)}<div class="muted tiny">${c.createdBy && c.createdAt !== c.updatedAt ? `added by <b style="color:${colorOf(c.createdBy)}">${esc(c.createdBy)}</b> · last changed by` : 'added by'} <b style="color:${colorOf(c.updatedBy)}">${esc(c.updatedBy)}</b> · ${when(c.updatedAt)}</div></td>
           <td class="num"><b>${fmt(c.amount)}</b></td>
           <td class="row-actions no-print">
             <button class="icon-btn" data-edit="${c.id}" aria-label="Edit">✏️</button>
@@ -442,6 +446,14 @@
   const kindOf = (l) => /balance sheet/i.test(l.action) ? 'sheet' : /investment|shop cost/i.test(l.action) ? 'invest' : 'other';
   const iconOf = (l) => ICONS[Object.keys(ICONS).find((k) => l.action.toLowerCase().includes(k)) || 'changed'];
 
+  function sentence(l) {
+    const m = /^(.*) (added|edited|deleted|changed|opened)$/i.exec(l.action);
+    if (!m) return l.action.toLowerCase();
+    const verb = m[2].toLowerCase();
+    const thing = m[1].toLowerCase().replace('investment', 'an investment payment').replace('balance sheet', 'the balance sheet').replace('shop cost', 'the shop cost').replace('password', 'their password').replace('portal', 'the portal');
+    return `${verb} ${thing}`;
+  }
+
   // Changes made by the other partners since I last opened this tab.
   const unseen = () => (state.log || []).filter((l) => l.by !== me.name && (!state.lastSeen || l.at > state.lastSeen));
 
@@ -471,7 +483,7 @@
     const strip = $('#latest-strip');
     strip.hidden = !latest;
     if (latest) {
-      strip.innerHTML = `<span class="live-dot"></span> <span class="strip-text">Last change: <b style="color:${colorOf(latest.by)}">${esc(latest.by)}</b> — ${esc(latest.action.toLowerCase())}, ${esc(latest.detail)} <span class="muted">· ${when(latest.at)}</span></span>`;
+      strip.innerHTML = `<span class="live-dot"></span> <span class="strip-text">Last change: <b style="color:${colorOf(latest.by)}">${esc(latest.by)}</b> ${esc(sentence(latest))} · ${esc(latest.detail)} <span class="muted">· ${when(latest.at)}</span></span>`;
     }
 
     const log = (state.log || []).filter((l) =>
@@ -489,16 +501,16 @@
       <h4 class="log-day">${g.label}</h4>
       <ol class="timeline">${g.items.map((l) => `
         <li class="${fresh.has(l) ? 'fresh' : ''}">
-          <span class="dot">${iconOf(l)}</span>
+          <span class="avatar log-avatar" style="--c:${colorOf(l.by)}">${esc(l.by[0])}<i>${iconOf(l)}</i></span>
           <div class="log-body">
-            <div><b>${esc(l.action)}</b> — ${esc(l.detail)} ${fresh.has(l) ? '<span class="new-tag">NEW</span>' : ''}</div>
+            <div class="log-line"><b class="who" style="color:${colorOf(l.by)}">${esc(l.by)}</b> ${esc(sentence(l))}
+              <span class="log-detail">${esc(l.detail)}</span> ${fresh.has(l) ? '<span class="new-tag">NEW</span>' : ''}</div>
             ${l.changes && l.changes.length ? `<ul class="diff">${l.changes.map((c) => `
               <li><span class="diff-field">${esc(c.field)}</span>
                 ${c.from ? `<span class="diff-from">${esc(c.from)}</span>` : ''}
                 ${c.from && c.to ? '<span class="arrow">→</span>' : ''}
                 ${c.to ? `<span class="diff-to">${esc(c.to)}</span>` : ''}</li>`).join('')}</ul>` : ''}
-            <div class="muted small"><span class="pill" style="--c:${colorOf(l.by)}">${esc(l.by)}</span>
-              ${new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+            <div class="muted small">🕒 ${new Date(l.at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${when(l.at).split(' · ')[1]}</div>
           </div>
         </li>`).join('')}</ol>`).join('');
   }

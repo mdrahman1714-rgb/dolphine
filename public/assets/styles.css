@@ -239,6 +239,13 @@ main { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .log-day:first-child { margin-top: 0; }
 .timeline li.fresh { background: #fefce8; border-radius: 12px; padding-left: 10px; padding-right: 10px; }
 .log-body { min-width: 0; flex: 1; }
+.log-avatar { width: 38px; height: 38px; position: relative; font-size: 1rem; }
+.log-avatar i { position: absolute; right: -6px; bottom: -4px; font-style: normal; font-size: .7rem; }
+.log-line { font-size: .98rem; }
+.log-line .who { font-weight: 800; }
+.log-detail { color: var(--muted); }
+.log-detail::before { content: '· '; }
+.who-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 0; }
 .new-tag { font-size: .65rem; font-weight: 800; background: #e11d48; color: #fff; padding: 2px 6px; border-radius: 6px; vertical-align: middle; }
 .diff { list-style: none; margin: 8px 0 4px; padding: 8px 10px; background: #faf8ff; border-radius: 10px; display: grid; gap: 4px; font-size: .88rem; }
 .diff li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
