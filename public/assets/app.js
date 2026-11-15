@@ -265,77 +265,199 @@
 
   const sheetDialog = $('#sheet-dialog');
   const sheetForm = $('#sheet-form');
+  const MONEY_FIELDS = ['cash', 'novo', 'mypos', 'mbway', 'openingTill', 'closingTill'];
+  const DRAFT_KEY = 'halal-draft-new-day';
   let editingDate = null;
 
-  function expenseRow(item = '', amount = '') {
+  // "12,50", "12.50", "€12" and sums like "120+35,5" all work. Empty is 0, nonsense is NaN.
+  function parseMoney(v) {
+    const s = String(v ?? '').replace(/[\s€]/g, '').replace(/,/g, '.');
+    if (!s) return 0;
+    let total = 0;
+    for (const part of s.split('+')) {
+      if (!/^\d*\.?\d*$/.test(part) || part === '.' ) return NaN;
+      total += part ? parseFloat(part) : 0;
+    }
+    return round(total);
+  }
+  const showMoney = (n) => (n || n === 0) && n !== '' ? String(n) : '';
+
+  function expenseRow(item = '', amount = '', focus = null) {
     const div = document.createElement('div');
     div.className = 'expense-row';
     div.innerHTML = `
-      <input type="text" class="exp-item" placeholder="Item (e.g. Breakfast)" maxlength="120" value="${esc(item)}" aria-label="Expense item" />
-      <input type="number" class="exp-amount" step="0.01" min="0" placeholder="0.00" inputmode="decimal" value="${amount === '' ? '' : esc(amount)}" aria-label="Expense amount" />
-      <button type="button" class="icon-btn" aria-label="Remove expense">✕</button>`;
-    div.querySelector('button').addEventListener('click', () => { div.remove(); updatePreview(); });
+      <input type="text" class="exp-item" placeholder="What for?" maxlength="120" value="${esc(item)}" aria-label="Expense item" enterkeyhint="next" list="expense-names" />
+      <span class="money"><i>€</i><input type="text" class="exp-amount" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(showMoney(amount))}" aria-label="Expense amount" enterkeyhint="next" /></span>
+      <button type="button" class="icon-btn remove" aria-label="Remove expense">✕</button>`;
+    div.querySelector('.remove').addEventListener('click', () => { div.remove(); updatePreview(); });
     $('#expense-rows').appendChild(div);
+    if (focus) div.querySelector(focus).focus();
+    updatePreview();
   }
-  $('#add-expense').addEventListener('click', () => { expenseRow(); $('#expense-rows .expense-row:last-child .exp-item').focus(); });
+  $('#add-expense').addEventListener('click', () => expenseRow('', '', '.exp-item'));
+
+  // Items used before, most frequent first, as one-tap chips.
+  function knownExpenses() {
+    const count = {};
+    for (const s of Object.values(state.sheets)) for (const e of s.expenses) if (e.item) count[e.item] = (count[e.item] || 0) + 1;
+    return Object.keys(count).sort((a, b) => count[b] - count[a]);
+  }
+  function renderSuggestions() {
+    const used = new Set($$('#expense-rows .exp-item').map((i) => i.value.trim().toLowerCase()));
+    const items = knownExpenses().filter((i) => !used.has(i.toLowerCase())).slice(0, 8);
+    $('#expense-suggest').innerHTML = items.map((i) => `<button type="button" class="chip-add">＋ ${esc(i)}</button>`).join('');
+    $$('#expense-suggest .chip-add').forEach((b, idx) => b.addEventListener('click', () => {
+      const empty = $$('#expense-rows .expense-row').find((r) => !r.querySelector('.exp-item').value.trim() && !r.querySelector('.exp-amount').value.trim());
+      if (empty) { empty.querySelector('.exp-item').value = items[idx]; empty.querySelector('.exp-amount').focus(); updatePreview(); }
+      else expenseRow(items[idx], '', '.exp-amount');
+    }));
+    let list = $('#expense-names');
+    if (!list) { list = document.createElement('datalist'); list.id = 'expense-names'; document.body.appendChild(list); }
+    list.innerHTML = knownExpenses().map((i) => `<option value="${esc(i)}"></option>`).join('');
+  }
 
   function readSheetForm() {
     const f = sheetForm.elements;
-    const num = (v) => round(parseFloat(v) || 0);
     return {
       date: f.date.value,
-      sales: { cash: num(f.cash.value), novo: num(f.novo.value), mypos: num(f.mypos.value), mbway: num(f.mbway.value) },
-      expenses: $$('#expense-rows .expense-row').map((r) => ({ item: r.querySelector('.exp-item').value.trim(), amount: num(r.querySelector('.exp-amount').value) })).filter((e) => e.item || e.amount),
-      openingTill: num(f.openingTill.value),
-      closingTill: num(f.closingTill.value),
+      sales: { cash: parseMoney(f.cash.value), novo: parseMoney(f.novo.value), mypos: parseMoney(f.mypos.value), mbway: parseMoney(f.mbway.value) },
+      expenses: $$('#expense-rows .expense-row').map((r) => ({ item: r.querySelector('.exp-item').value.trim(), amount: parseMoney(r.querySelector('.exp-amount').value) })).filter((e) => e.item || e.amount),
+      openingTill: parseMoney(f.openingTill.value),
+      closingTill: parseMoney(f.closingTill.value),
       notes: f.notes.value.trim()
     };
   }
 
+  function badInputs() {
+    return [...MONEY_FIELDS.map((n) => sheetForm.elements[n]), ...$$('#expense-rows .exp-amount')].filter((i) => Number.isNaN(parseMoney(i.value)));
+  }
+
   function updatePreview() {
-    const t = totals(readSheetForm());
-    $('#sheet-preview').innerHTML = [
-      ['Total sales', t.sales], ['Expenses', t.expenses], ['Net', t.net], ['Expected cash', t.expected], ['Cash taken out', t.takenOut]
-    ].map(([l, v]) => `<div><span>${l}</span><strong>${fmt(v)}</strong></div>`).join('');
+    // Mark fields that cannot be read as an amount, and show the result of sums.
+    $$('input', sheetForm).forEach((i) => i.classList.remove('bad'));
+    badInputs().forEach((i) => i.classList.add('bad'));
+    MONEY_FIELDS.forEach((n) => {
+      const v = sheetForm.elements[n].value;
+      const out = $(`.calc[data-for="${n}"]`);
+      const val = parseMoney(v);
+      out.textContent = v.includes('+') && !Number.isNaN(val) ? `= ${fmt(val)}` : '';
+    });
+
+    const data = readSheetForm();
+    const ok = !badInputs().length;
+    const t = totals({ ...data, sales: Object.fromEntries(Object.entries(data.sales).map(([k, v]) => [k, v || 0])),
+      expenses: data.expenses.map((e) => ({ ...e, amount: e.amount || 0 })), openingTill: data.openingTill || 0, closingTill: data.closingTill || 0 });
+    $('#ed-sales-total').textContent = fmt(t.sales);
+    $('#ed-exp-total').textContent = fmt(t.expenses);
+    $('#sheet-preview').innerHTML = `
+      <div><span>Sales</span><strong>${fmt(t.sales)}</strong></div>
+      <div><span>Expenses</span><strong>${fmt(t.expenses)}</strong></div>
+      <div><span>Net</span><strong>${fmt(t.net)}</strong></div>
+      <div class="hl"><span>Cash taken out</span><strong>${fmt(t.takenOut)}</strong></div>`;
+    $('.save-btn').disabled = !ok;
+
+    const warn = $('#date-warning');
+    const clash = data.date && data.date !== editingDate && state.sheets[data.date];
+    warn.hidden = !clash;
+    if (clash) warn.innerHTML = `⚠️ ${niceDate(data.date)} already has a sheet. Saving will replace it.`;
+    $$('.qd').forEach((b) => b.classList.toggle('on', data.date === dayOffset(Number(b.dataset.day))));
+    renderSuggestions();
+
+    if (!editingDate) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(rawForm())); } catch {}
+    }
   }
   sheetForm.addEventListener('input', updatePreview);
+
+  function dayOffset(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+  $$('.qd').forEach((b) => b.addEventListener('click', () => { sheetForm.elements.date.value = dayOffset(Number(b.dataset.day)); updatePreview(); }));
+
+  // What the person typed, exactly, so a draft comes back as they left it.
+  function rawForm() {
+    const f = sheetForm.elements;
+    const o = { date: f.date.value, notes: f.notes.value };
+    MONEY_FIELDS.forEach((n) => (o[n] = f[n].value));
+    o.expenses = $$('#expense-rows .expense-row').map((r) => [r.querySelector('.exp-item').value, r.querySelector('.exp-amount').value]);
+    return o;
+  }
+
+  // Enter moves to the next box instead of saving half a sheet; tapping a box selects what is in it.
+  sheetForm.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    const inputs = $$('input:not([type=date]), textarea', sheetForm);
+    const next = inputs[inputs.indexOf(e.target) + 1];
+    if (next) next.focus(); else sheetForm.requestSubmit();
+  });
+  sheetForm.addEventListener('focusin', (e) => {
+    if (e.target.matches('.money input')) setTimeout(() => e.target.select(), 0);
+  });
 
   function openSheetDialog(sheet) {
     editingDate = sheet ? sheet.date : null;
     $('#sheet-error').textContent = '';
-    $('#sheet-dialog-title').textContent = sheet ? `Edit ${niceDate(sheet.date)}` : 'New balance sheet';
+    $('#sheet-dialog-title').textContent = sheet ? `Edit ${shortDay(sheet.date)}` : 'New day';
     const f = sheetForm.elements;
     const dates = Object.keys(state.sheets).sort();
     const last = dates.length ? state.sheets[dates[dates.length - 1]] : null;
-    f.date.value = sheet ? sheet.date : today();
-    METHODS.forEach((m) => (f[m.key].value = sheet ? sheet.sales[m.key] || '' : ''));
-    // A new day opens with yesterday's closing float.
-    f.openingTill.value = sheet ? sheet.openingTill : last ? last.closingTill : 180;
-    f.closingTill.value = sheet ? sheet.closingTill : last ? last.closingTill : 180;
-    f.notes.value = sheet ? sheet.notes || '' : '';
     $('#expense-rows').innerHTML = '';
-    (sheet && sheet.expenses.length ? sheet.expenses : [{ item: '', amount: '' }]).forEach((e) => expenseRow(e.item, e.amount));
+
+    let draft = null;
+    if (!sheet) { try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch {} }
+    const hasDraft = draft && (MONEY_FIELDS.slice(0, 4).some((n) => draft[n]) || (draft.expenses || []).some(([i, a]) => i || a));
+
+    if (sheet) {
+      f.date.value = sheet.date;
+      METHODS.forEach((m) => (f[m.key].value = showMoney(sheet.sales[m.key] || '')));
+      f.openingTill.value = showMoney(sheet.openingTill);
+      f.closingTill.value = showMoney(sheet.closingTill);
+      f.notes.value = sheet.notes || '';
+      sheet.expenses.forEach((e) => expenseRow(e.item, e.amount));
+    } else if (hasDraft) {
+      f.date.value = draft.date || today();
+      MONEY_FIELDS.forEach((n) => (f[n].value = draft[n] || ''));
+      f.notes.value = draft.notes || '';
+      (draft.expenses || []).forEach(([i, a]) => expenseRow(i, a));
+      toast('Your unsaved day was brought back');
+    } else {
+      // The next day after the last sheet, starting with its closing float.
+      const next = last ? (() => { const d = new Date(last.date + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })() : today();
+      f.date.value = next <= today() ? next : today();
+      MONEY_FIELDS.forEach((n) => (f[n].value = ''));
+      f.openingTill.value = showMoney(last ? last.closingTill : 180);
+      f.closingTill.value = showMoney(last ? last.closingTill : 180);
+      f.notes.value = '';
+    }
+    if (!$$('#expense-rows .expense-row').length) expenseRow();
     updatePreview();
     sheetDialog.showModal();
+    sheetDialog.querySelector('.dialog-body').scrollTop = 0;
+    if (!sheet && window.matchMedia('(min-width: 821px)').matches) f.cash.focus();
   }
   $('#new-sheet-btn').addEventListener('click', () => openSheetDialog(null));
 
   sheetForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const data = readSheetForm();
     const err = $('#sheet-error');
     err.textContent = '';
+    const bad = badInputs();
+    if (bad.length) { err.textContent = 'One amount is not a number — check the red box.'; bad[0].focus(); return; }
+    const data = readSheetForm();
     if (!data.date) { err.textContent = 'Pick a date.'; return; }
     if (data.date !== editingDate && state.sheets[data.date] &&
         !confirm(`There is already a sheet for ${niceDate(data.date)}. Replace it?`)) return;
+    const btn = $('.save-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
     try {
       state = await api('sheets/' + data.date, { method: 'PUT', body: data });
       if (editingDate && editingDate !== data.date) state = await api('sheets/' + editingDate, { method: 'DELETE' });
+      if (!editingDate) { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
       selectedDate = data.date;
       sheetDialog.close();
       renderAll();
-      toast('Balance sheet saved ✔');
+      toast('Day saved ✔');
     } catch (ex) { err.textContent = ex.message; }
+    finally { btn.disabled = false; btn.textContent = 'Save day'; }
   });
 
   /* ----------------------------- investment ---------------------------- */

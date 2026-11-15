@@ -130,49 +130,82 @@
 </div>
 
 <!-- =============================== DIALOGS =============================== -->
-<dialog id="sheet-dialog" class="dialog dialog-wide">
-  <form id="sheet-form" method="dialog">
+<dialog id="sheet-dialog" class="dialog sheet-dialog">
+  <form id="sheet-form" novalidate>
     <header class="dialog-head">
-      <h3 id="sheet-dialog-title">Balance sheet</h3>
+      <h3 id="sheet-dialog-title">New day</h3>
       <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
     </header>
 
     <div class="dialog-body sheet-editor">
-      <label class="field"><span>Date</span><input type="date" name="date" required /></label>
-
-      <fieldset class="group group-sales">
-        <legend>Sales</legend>
-        <div class="grid-2">
-          <label class="field"><span>💶 Cash</span><input type="number" step="0.01" min="0" name="cash" inputmode="decimal" /></label>
-          <label class="field"><span>💳 Novo</span><input type="number" step="0.01" min="0" name="novo" inputmode="decimal" /></label>
-          <label class="field"><span>💳 MyPOS</span><input type="number" step="0.01" min="0" name="mypos" inputmode="decimal" /></label>
-          <label class="field"><span>📱 MB Way</span><input type="number" step="0.01" min="0" name="mbway" inputmode="decimal" /></label>
+      <section class="ed-section ed-date">
+        <div class="date-row">
+          <input type="date" name="date" required aria-label="Date" />
+          <button type="button" class="qd" data-day="0">Today</button>
+          <button type="button" class="qd" data-day="-1">Yesterday</button>
         </div>
-      </fieldset>
+        <p id="date-warning" class="warn" hidden></p>
+      </section>
 
-      <fieldset class="group group-expenses">
-        <legend>Expenses <small>(paid from the till)</small></legend>
+      <section class="ed-section ed-sales">
+        <h4>💰 Sales</h4>
+        <label class="money-row">
+          <span class="mr-label">💶 Cash</span>
+          <span class="money"><i>€</i><input name="cash" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="cash"></small>
+        </label>
+        <label class="money-row">
+          <span class="mr-label">💳 Novo</span>
+          <span class="money"><i>€</i><input name="novo" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="novo"></small>
+        </label>
+        <label class="money-row">
+          <span class="mr-label">💳 MyPOS</span>
+          <span class="money"><i>€</i><input name="mypos" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="mypos"></small>
+        </label>
+        <label class="money-row">
+          <span class="mr-label">📱 MB Way</span>
+          <span class="money"><i>€</i><input name="mbway" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="mbway"></small>
+        </label>
+        <div class="ed-subtotal"><span>Total sales</span><b id="ed-sales-total">€0.00</b></div>
+      </section>
+
+      <section class="ed-section ed-exp">
+        <h4>🧾 Expenses <small>paid from the till</small></h4>
         <div id="expense-rows" class="expense-rows"></div>
-        <button type="button" id="add-expense" class="btn btn-ghost btn-sm">＋ Add expense</button>
-      </fieldset>
+        <div id="expense-suggest" class="suggest"></div>
+        <button type="button" id="add-expense" class="add-row">＋ Add another expense</button>
+        <div class="ed-subtotal"><span>Total expenses</span><b id="ed-exp-total">€0.00</b></div>
+      </section>
 
-      <fieldset class="group group-till">
-        <legend>Cash till</legend>
-        <div class="grid-2">
-          <label class="field"><span>Opening till</span><input type="number" step="0.01" min="0" name="openingTill" inputmode="decimal" /></label>
-          <label class="field"><span>Closing till (float kept)</span><input type="number" step="0.01" min="0" name="closingTill" inputmode="decimal" /></label>
-        </div>
-      </fieldset>
+      <section class="ed-section ed-till">
+        <h4>🏦 Cash till</h4>
+        <label class="money-row">
+          <span class="mr-label">Opening till<small>float at the start</small></span>
+          <span class="money"><i>€</i><input name="openingTill" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="openingTill"></small>
+        </label>
+        <label class="money-row">
+          <span class="mr-label">Closing till<small>float kept in the till</small></span>
+          <span class="money"><i>€</i><input name="closingTill" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="next" placeholder="0,00" /></span>
+          <small class="calc" data-for="closingTill"></small>
+        </label>
+        <p class="hint">Opening till is filled in from the last day's closing float.</p>
+      </section>
 
-      <label class="field"><span>Notes</span><textarea name="notes" rows="2" placeholder="Anything the others should know"></textarea></label>
+      <section class="ed-section">
+        <label class="field"><span>📝 Notes <small>(optional)</small></span><textarea name="notes" rows="2" placeholder="Anything the others should know"></textarea></label>
+      </section>
 
-      <div id="sheet-preview" class="live-totals"></div>
+      <p class="hint tip">Tip: you can type sums like <b>120+35,50</b> and use a comma or a dot.</p>
     </div>
 
-    <footer class="dialog-foot">
+    <footer class="sheet-foot">
+      <div id="sheet-preview" class="foot-totals"></div>
       <p class="form-error" id="sheet-error" role="alert"></p>
-      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
-      <button type="submit" class="btn btn-primary">Save sheet</button>
+      <button type="submit" class="btn btn-primary btn-lg save-btn">Save day</button>
     </footer>
   </form>
 </dialog>
