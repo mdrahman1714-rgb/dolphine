@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Halal Meat Shop — Partner Portal</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>" />
+</head>
+<body>
+
+<!-- ================================ LOGIN ================================ -->
+<section id="login-view" class="login-view" hidden>
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <div class="login-card">
+    <div class="brand brand-lg">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M40 8a24 24 0 1 0 16 41A20 20 0 1 1 40 8z" fill="currentColor"/><path d="M50 14l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7z" fill="currentColor"/></svg>
+      </div>
+      <div>
+        <h1>Halal Meat Shop</h1>
+        <p>Partner Portal</p>
+      </div>
+    </div>
+
+    <p class="login-hint">Who are you?</p>
+    <div id="member-picker" class="member-picker" role="radiogroup" aria-label="Partner"></div>
+
+    <form id="login-form" class="login-form" autocomplete="off">
+      <label for="password-input" class="sr-only">Password</label>
+      <input id="password-input" type="password" placeholder="Password" autocomplete="current-password" aria-describedby="login-error" />
+      <button class="btn btn-primary btn-lg" type="submit">Enter portal</button>
+    </form>
+    <p id="login-error" class="form-error" role="alert"></p>
+  </div>
+</section>
+
+<!-- ================================= APP ================================= -->
+<div id="app-view" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo logo-sm" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M40 8a24 24 0 1 0 16 41A20 20 0 1 1 40 8z" fill="currentColor"/><path d="M50 14l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7z" fill="currentColor"/></svg>
+      </div>
+      <div>
+        <strong>Halal Meat Shop</strong>
+        <small>Partner Portal</small>
+      </div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-tab="sheets" role="tab">📒 <span>Balance sheets</span></button>
+      <button class="tab" data-tab="invest" role="tab">💰 <span>Investment</span></button>
+      <button class="tab" data-tab="log" role="tab">🕒 <span>Last changes</span></button>
+    </nav>
+
+    <div class="user-menu">
+      <button id="user-button" class="user-chip" aria-haspopup="true" aria-expanded="false"></button>
+      <div id="user-dropdown" class="dropdown" hidden>
+        <button id="change-password-btn">🔑 Change password</button>
+        <button id="logout-btn">🚪 Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ------------------------- Balance sheets -------------------------- -->
+    <section id="tab-sheets" class="tab-panel">
+      <div class="page-head">
+        <div>
+          <h2>Daily balance sheets</h2>
+          <p class="muted">Shop taken over on 14 November 2026.</p>
+        </div>
+        <button id="new-sheet-btn" class="btn btn-primary">＋ Add a day</button>
+      </div>
+
+      <div id="kpis" class="kpis"></div>
+      <div id="method-split" class="card method-split"></div>
+
+      <div class="sheets-layout">
+        <aside class="card day-list-card">
+          <h3>Days</h3>
+          <ul id="day-list" class="day-list"></ul>
+        </aside>
+        <article id="sheet-detail" class="card sheet-detail"></article>
+      </div>
+    </section>
+
+    <!-- --------------------------- Investment ---------------------------- -->
+    <section id="tab-invest" class="tab-panel" hidden>
+      <div class="page-head">
+        <div>
+          <h2>Investment</h2>
+          <p class="muted">Shop cost shared between three investors. Tanvir's share covers Tanvir &amp; Jasim (brothers).</p>
+        </div>
+        <button id="new-invest-btn" class="btn btn-primary">＋ Add payment</button>
+      </div>
+
+      <div id="invest-hero" class="card invest-hero"></div>
+      <div id="investor-cards" class="investor-cards"></div>
+
+      <div class="card">
+        <h3>Payments</h3>
+        <div class="table-wrap"><table id="invest-table" class="table"></table></div>
+      </div>
+    </section>
+
+    <!-- --------------------------- Change log ---------------------------- -->
+    <section id="tab-log" class="tab-panel" hidden>
+      <div class="page-head">
+        <div>
+          <h2>Last changes</h2>
+          <p class="muted">Every add, edit and delete — who did it and when.</p>
+        </div>
+      </div>
+      <div class="card"><ol id="log-list" class="timeline"></ol></div>
+    </section>
+  </main>
+</div>
+
+<!-- =============================== DIALOGS =============================== -->
+<dialog id="sheet-dialog" class="dialog dialog-wide">
+  <form id="sheet-form" method="dialog">
+    <header class="dialog-head">
+      <h3 id="sheet-dialog-title">Balance sheet</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+    </header>
+
+    <div class="dialog-body sheet-editor">
+      <label class="field"><span>Date</span><input type="date" name="date" required /></label>
+
+      <fieldset class="group group-sales">
+        <legend>Sales</legend>
+        <div class="grid-2">
+          <label class="field"><span>💶 Cash</span><input type="number" step="0.01" min="0" name="cash" inputmode="decimal" /></label>
+          <label class="field"><span>💳 Novo</span><input type="number" step="0.01" min="0" name="novo" inputmode="decimal" /></label>
+          <label class="field"><span>💳 MyPOS</span><input type="number" step="0.01" min="0" name="mypos" inputmode="decimal" /></label>
+          <label class="field"><span>📱 MB Way</span><input type="number" step="0.01" min="0" name="mbway" inputmode="decimal" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="group group-expenses">
+        <legend>Expenses <small>(paid from the till)</small></legend>
+        <div id="expense-rows" class="expense-rows"></div>
+        <button type="button" id="add-expense" class="btn btn-ghost btn-sm">＋ Add expense</button>
+      </fieldset>
+
+      <fieldset class="group group-till">
+        <legend>Cash till</legend>
+        <div class="grid-2">
+          <label class="field"><span>Opening till</span><input type="number" step="0.01" min="0" name="openingTill" inputmode="decimal" /></label>
+          <label class="field"><span>Closing till (float kept)</span><input type="number" step="0.01" min="0" name="closingTill" inputmode="decimal" /></label>
+        </div>
+      </fieldset>
+
+      <label class="field"><span>Notes</span><textarea name="notes" rows="2" placeholder="Anything the others should know"></textarea></label>
+
+      <div id="sheet-preview" class="live-totals"></div>
+    </div>
+
+    <footer class="dialog-foot">
+      <p class="form-error" id="sheet-error" role="alert"></p>
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Save sheet</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="invest-dialog" class="dialog">
+  <form id="invest-form" method="dialog">
+    <header class="dialog-head">
+      <h3 id="invest-dialog-title">Payment</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+    </header>
+    <div class="dialog-body">
+      <label class="field"><span>Investor</span>
+        <select name="investor" required>
+          <option value="sam">Sam</option>
+          <option value="tanvir">Tanvir (with Jasim)</option>
+          <option value="ruble">Ruble</option>
+        </select>
+      </label>
+      <label class="field"><span>Amount (€)</span><input type="number" name="amount" step="0.01" min="0.01" required inputmode="decimal" /></label>
+      <label class="field"><span>Date</span><input type="date" name="date" required /></label>
+      <label class="field"><span>Note</span><input type="text" name="note" maxlength="200" placeholder="e.g. Deposit, second instalment" /></label>
+    </div>
+    <footer class="dialog-foot">
+      <p class="form-error" id="invest-error" role="alert"></p>
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Save payment</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="target-dialog" class="dialog">
+  <form id="target-form" method="dialog">
+    <header class="dialog-head">
+      <h3>Total shop cost</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+    </header>
+    <div class="dialog-body">
+      <label class="field"><span>Total cost (€)</span><input type="number" name="total" step="0.01" min="1" required inputmode="decimal" /></label>
+    </div>
+    <footer class="dialog-foot">
+      <p class="form-error" id="target-error" role="alert"></p>
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="password-dialog" class="dialog">
+  <form id="password-form" method="dialog">
+    <header class="dialog-head">
+      <h3>Change your password</h3>
+      <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+    </header>
+    <div class="dialog-body">
+      <label class="field"><span>Current password</span><input type="password" name="current" required autocomplete="current-password" /></label>
+      <label class="field"><span>New password</span><input type="password" name="next" required minlength="6" autocomplete="new-password" /></label>
+      <label class="field"><span>Repeat new password</span><input type="password" name="repeat" required minlength="6" autocomplete="new-password" /></label>
+    </div>
+    <footer class="dialog-foot">
+      <p class="form-error" id="password-error" role="alert"></p>
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary">Change password</button>
+    </footer>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

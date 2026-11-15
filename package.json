@@ -1,0 +1,10 @@
+{
+  "name": "halal-shop-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Partner portal for the Halal Meat Shop: daily balance sheets, investments and a change log, stored in Netlify Blobs.",
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
