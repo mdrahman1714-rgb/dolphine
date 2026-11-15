@@ -14,6 +14,7 @@
      PUT    /api/investments/:id    create or replace one contribution
      DELETE /api/investments/:id    delete one contribution
      PUT    /api/target             { total } -> change the shop's total cost
+     POST   /api/seen               mark the change log as read for me
 */
 
 import { getStore } from '@netlify/blobs';
@@ -102,8 +103,10 @@ async function loadState() {
   return fresh;
 }
 
-async function saveState(state, member, action, detail) {
-  state.log = [{ at: new Date().toISOString(), by: member.name, action, detail }, ...(state.log || [])].slice(0, 300);
+async function saveState(state, member, action, detail, changes = []) {
+  const entry = { at: new Date().toISOString(), by: member.name, action, detail };
+  if (changes.length) entry.changes = changes;
+  state.log = [entry, ...(state.log || [])].slice(0, 500);
   await store().setJSON('state', state);
   return state;
 }
@@ -170,7 +173,7 @@ const money = (v) => {
   const n = Math.round((Number(v) || 0) * 100) / 100;
   return Number.isFinite(n) ? n : 0;
 };
-const euro = (n) => `€${money(n).toFixed(2)}`;
+const euro = (n) => '€' + money(n).toLocaleString('en-IE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
 const niceDate = (d) => d.split('-').reverse().join('/');
 
@@ -197,6 +200,68 @@ function cleanSheet(date, body, member) {
 }
 
 const salesTotal = (s) => s.sales.cash + s.sales.novo + s.sales.mypos + s.sales.mbway;
+const expensesTotal = (s) => s.expenses.reduce((t, e) => t + e.amount, 0);
+
+/* ---------------------------- change tracking --------------------------- */
+
+/* Field-by-field differences, so the log says exactly what was changed:
+   "Cash: €360.00 → €380.00", not just "sheet edited". */
+const SHEET_FIELDS = [
+  ['Cash', (s) => euro(s.sales.cash)],
+  ['Novo', (s) => euro(s.sales.novo)],
+  ['MyPOS', (s) => euro(s.sales.mypos)],
+  ['MB Way', (s) => euro(s.sales.mbway)],
+  ['Opening till', (s) => euro(s.openingTill)],
+  ['Closing till', (s) => euro(s.closingTill)],
+  ['Notes', (s) => s.notes || '—']
+];
+
+function sheetChanges(before, after) {
+  const changes = [];
+  for (const [field, get] of SHEET_FIELDS) {
+    const from = get(before);
+    const to = get(after);
+    if (from !== to) changes.push({ field, from, to });
+  }
+  // Match expenses that are exactly the same first, then pair up ones with the
+  // same name whose amount changed, and whatever is left was added or removed.
+  const removed = [...before.expenses];
+  const added = [];
+  for (const e of after.expenses) {
+    const i = removed.findIndex((o) => o.item === e.item && o.amount === e.amount);
+    if (i >= 0) removed.splice(i, 1);
+    else added.push(e);
+  }
+  for (const e of [...added]) {
+    const i = removed.findIndex((o) => o.item.toLowerCase() === e.item.toLowerCase());
+    if (i < 0) continue;
+    changes.push({ field: `Expense: ${e.item || '—'}`, from: euro(removed[i].amount), to: euro(e.amount) });
+    removed.splice(i, 1);
+    added.splice(added.indexOf(e), 1);
+  }
+  for (const e of removed) changes.push({ field: 'Expense removed', from: `${e.item || '—'} ${euro(e.amount)}`, to: '' });
+  for (const e of added) changes.push({ field: 'Expense added', from: '', to: `${e.item || '—'} ${euro(e.amount)}` });
+  return changes;
+}
+
+function sheetSnapshot(s) {
+  return [
+    { field: 'Total sales', from: euro(salesTotal(s)), to: '' },
+    { field: 'Total expenses', from: euro(expensesTotal(s)), to: '' }
+  ];
+}
+
+function investmentChanges(before, after) {
+  const fields = [
+    ['Investor', (c) => findMember(c.investor).name],
+    ['Amount', (c) => euro(c.amount)],
+    ['Date', (c) => niceDate(c.date)],
+    ['Note', (c) => c.note || '—']
+  ];
+  return fields
+    .map(([field, get]) => ({ field, from: get(before), to: get(after) }))
+    .filter((c) => c.from !== c.to);
+}
 
 /* -------------------------------- routing ------------------------------- */
 
@@ -213,7 +278,14 @@ export default async function handler(req) {
     if (!member) return json({ error: 'Please sign in first.' }, 401);
 
     if (resource === 'password' && method === 'POST') return passwordRoute(req, member);
-    if (resource === 'state' && method === 'GET') return json(await loadState());
+    if (resource === 'state' && method === 'GET') {
+      const lastSeen = await store().get(`seen/${member.id}`).catch(() => null);
+      return json({ ...(await loadState()), lastSeen: lastSeen || null });
+    }
+    if (resource === 'seen' && method === 'POST') {
+      await store().set(`seen/${member.id}`, new Date().toISOString());
+      return json({ ok: true });
+    }
     if (resource === 'sheets') return sheetsRoute(req, method, id, member);
     if (resource === 'investments') return investmentsRoute(req, method, id, member);
     if (resource === 'target' && method === 'PUT') return targetRoute(req, member);
@@ -263,21 +335,25 @@ async function sheetsRoute(req, method, date, member) {
   if (method === 'PUT') {
     const body = await req.json().catch(() => null);
     if (!body) return json({ error: 'Send the sheet as JSON.' }, 400);
-    const existed = Boolean(state.sheets[date]);
+    const before = state.sheets[date];
     const sheet = cleanSheet(date, body, member);
+    const changes = before ? sheetChanges(before, sheet) : [];
+    if (before && !changes.length) return json(state); // nothing actually changed
     state.sheets[date] = sheet;
     await saveState(
       state, member,
-      existed ? 'Balance sheet edited' : 'Balance sheet added',
-      `${niceDate(date)} — sales ${euro(salesTotal(sheet))}`
+      before ? 'Balance sheet edited' : 'Balance sheet added',
+      `${niceDate(date)} — sales ${euro(salesTotal(sheet))}`,
+      changes
     );
     return json(state);
   }
 
   if (method === 'DELETE') {
     if (!state.sheets[date]) return json({ error: 'That day has no sheet.' }, 404);
+    const gone = state.sheets[date];
     delete state.sheets[date];
-    await saveState(state, member, 'Balance sheet deleted', niceDate(date));
+    await saveState(state, member, 'Balance sheet deleted', niceDate(date), sheetSnapshot(gone));
     return json(state);
   }
   return json({ error: 'Unsupported method.' }, 405);
@@ -304,17 +380,20 @@ async function investmentsRoute(req, method, id, member) {
       updatedBy: member.name,
       updatedAt: new Date().toISOString()
     };
+    const changes = idx >= 0 ? investmentChanges(state.investments[idx], entry) : [];
+    if (idx >= 0 && !changes.length) return json(state);
     if (idx >= 0) state.investments[idx] = entry;
     else state.investments.push(entry);
     const who = findMember(entry.investor).name;
-    await saveState(state, member, idx >= 0 ? 'Investment edited' : 'Investment added', `${who} — ${euro(amount)}`);
+    await saveState(state, member, idx >= 0 ? 'Investment edited' : 'Investment added', `${who} — ${euro(amount)}`, changes);
     return json(state);
   }
 
   if (method === 'DELETE') {
     if (idx < 0) return json({ error: 'That contribution is gone already.' }, 404);
     const [gone] = state.investments.splice(idx, 1);
-    await saveState(state, member, 'Investment deleted', `${findMember(gone.investor).name} — ${euro(gone.amount)}`);
+    await saveState(state, member, 'Investment deleted', `${findMember(gone.investor).name} — ${euro(gone.amount)}`,
+      [{ field: 'Date', from: niceDate(gone.date), to: '' }, { field: 'Note', from: gone.note || '—', to: '' }]);
     return json(state);
   }
   return json({ error: 'Unsupported method.' }, 405);
@@ -326,7 +405,9 @@ async function targetRoute(req, member) {
   if (total <= 0) return json({ error: 'Enter the total cost.' }, 400);
   const state = await loadState();
   const before = state.target;
+  if (before === total) return json(state);
   state.target = total;
-  await saveState(state, member, 'Shop cost changed', `${euro(before)} → ${euro(total)}`);
+  await saveState(state, member, 'Shop cost changed', `${euro(before)} → ${euro(total)}`,
+    [{ field: 'Shop cost', from: euro(before), to: euro(total) }]);
   return json(state);
 }

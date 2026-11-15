@@ -56,7 +56,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab" data-tab="sheets" role="tab">📒 <span>Balance sheets</span></button>
       <button class="tab" data-tab="invest" role="tab">💰 <span>Investment</span></button>
-      <button class="tab" data-tab="log" role="tab">🕒 <span>Last changes</span></button>
+      <button class="tab" data-tab="log" role="tab">🕒 <span>Last changes</span><b id="log-badge" class="badge" hidden></b></button>
     </nav>
 
     <div class="user-menu">
@@ -67,6 +67,8 @@
       </div>
     </div>
   </header>
+
+  <button id="latest-strip" class="latest-strip" hidden></button>
 
   <main>
     <!-- ------------------------- Balance sheets -------------------------- -->
@@ -118,7 +120,11 @@
           <p class="muted">Every add, edit and delete — who did it and when.</p>
         </div>
       </div>
-      <div class="card"><ol id="log-list" class="timeline"></ol></div>
+      <div class="card log-filters">
+        <div class="chips" id="log-people" role="group" aria-label="Filter by partner"></div>
+        <div class="chips" id="log-kinds" role="group" aria-label="Filter by type"></div>
+      </div>
+      <div class="card"><div id="log-list" class="log-days"></div></div>
     </section>
   </main>
 </div>

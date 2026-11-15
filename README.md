@@ -4,7 +4,7 @@ A private portal for the four partners (Sam, Jasim, Tanvir, Ruble):
 
 - **Balance sheets**: one sheet per day with sales (Cash, Novo, MyPOS, MB Way), expenses and the cash till. Totals, net and cash taken out are worked out automatically. Every sheet can be printed.
 - **Investment**: shop cost €33,000 split between three investors (Sam, Tanvir on behalf of Tanvir & Jasim, Ruble), €11,000 each. It starts with the €10,000 deposit split equally; edit the entries if the real split was different.
-- **Last changes**: who added, edited or deleted what, and when.
+- **Last changes**: who added, edited or deleted what, and when, with the exact before → after values (e.g. "Cash €360.00 → €380.00"). A red badge counts changes the other partners made since you last looked, a strip at the top shows the latest change, and you can filter by partner or by type.
 
 Day one (14/11/2026) is already filled in.
 

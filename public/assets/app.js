@@ -111,8 +111,11 @@
     const btn = $('#user-button');
     btn.style.setProperty('--c', me.color);
     btn.innerHTML = `<span class="avatar">${esc(me.name[0])}</span><span>${esc(me.name)}</span> ▾`;
-    showTab(sessionStorage.getItem('tab') || 'sheets');
     renderAll();
+    let tab = 'sheets';
+    try { tab = sessionStorage.getItem('tab') || 'sheets'; } catch {}
+    showTab(tab);
+    $('#latest-strip').onclick = () => showTab('log');
   }
 
   /* ------------------------------- tabs -------------------------------- */
@@ -121,6 +124,8 @@
     try { sessionStorage.setItem('tab', name); } catch {}
     $$('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
     $$('.tab-panel').forEach((p) => (p.hidden = p.id !== 'tab-' + name));
+    if (state && name !== 'log') renderLog();
+    if (state && name === 'log') markSeen();
   }
   $$('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
 
@@ -427,16 +432,85 @@
   /* ----------------------------- change log ---------------------------- */
 
   const ICONS = { added: '🟢', edited: '🟡', deleted: '🔴', changed: '🔵', opened: '🎉' };
+  const KINDS = [
+    { id: 'all', label: 'Everything' },
+    { id: 'sheet', label: '📒 Balance sheets' },
+    { id: 'invest', label: '💰 Investment' },
+    { id: 'other', label: '⚙️ Other' }
+  ];
+  const logFilter = { by: 'all', kind: 'all' };
+  const kindOf = (l) => /balance sheet/i.test(l.action) ? 'sheet' : /investment|shop cost/i.test(l.action) ? 'invest' : 'other';
+  const iconOf = (l) => ICONS[Object.keys(ICONS).find((k) => l.action.toLowerCase().includes(k)) || 'changed'];
+
+  // Changes made by the other partners since I last opened this tab.
+  const unseen = () => (state.log || []).filter((l) => l.by !== me.name && (!state.lastSeen || l.at > state.lastSeen));
+
+  function dayLabel(iso) {
+    const d = new Date(iso); const t = new Date();
+    const y = new Date(t); y.setDate(t.getDate() - 1);
+    if (d.toDateString() === t.toDateString()) return 'Today';
+    if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  function renderChips(el, items, key) {
+    el.innerHTML = items.map((i) => `<button class="chip ${logFilter[key] === i.id ? 'on' : ''}" data-v="${esc(i.id)}" style="--c:${i.color || '#7c3aed'}">${esc(i.label)}</button>`).join('');
+    $$('.chip', el).forEach((b) => b.addEventListener('click', () => { logFilter[key] = b.dataset.v; renderLog(); }));
+  }
+
   function renderLog() {
-    const log = state.log || [];
-    $('#log-list').innerHTML = log.length ? log.map((l) => {
-      const kind = Object.keys(ICONS).find((k) => l.action.toLowerCase().includes(k)) || 'changed';
-      return `<li class="log-${kind}">
-        <span class="dot">${ICONS[kind]}</span>
-        <div><b>${esc(l.action)}</b> — ${esc(l.detail)}
-          <div class="muted small"><span class="pill" style="--c:${colorOf(l.by)}">${esc(l.by)}</span> ${when(l.at)}</div></div>
-      </li>`;
-    }).join('') : '<li class="muted">Nothing changed yet.</li>';
+    renderChips($('#log-people'), [{ id: 'all', label: '👥 Everyone' }, ...members.map((m) => ({ id: m.name, label: m.name, color: m.color }))], 'by');
+    renderChips($('#log-kinds'), KINDS, 'kind');
+
+    const fresh = new Set(unseen());
+    const badge = $('#log-badge');
+    badge.hidden = !fresh.size;
+    badge.textContent = fresh.size > 99 ? '99+' : fresh.size;
+
+    const latest = (state.log || [])[0];
+    const strip = $('#latest-strip');
+    strip.hidden = !latest;
+    if (latest) {
+      strip.innerHTML = `<span class="live-dot"></span> <span class="strip-text">Last change: <b style="color:${colorOf(latest.by)}">${esc(latest.by)}</b> — ${esc(latest.action.toLowerCase())}, ${esc(latest.detail)} <span class="muted">· ${when(latest.at)}</span></span>`;
+    }
+
+    const log = (state.log || []).filter((l) =>
+      (logFilter.by === 'all' || l.by === logFilter.by) && (logFilter.kind === 'all' || kindOf(l) === logFilter.kind));
+
+    if (!log.length) { $('#log-list').innerHTML = '<p class="muted">No changes match this filter.</p>'; return; }
+
+    const groups = [];
+    for (const l of log) {
+      const label = dayLabel(l.at);
+      if (!groups.length || groups[groups.length - 1].label !== label) groups.push({ label, items: [] });
+      groups[groups.length - 1].items.push(l);
+    }
+    $('#log-list').innerHTML = groups.map((g) => `
+      <h4 class="log-day">${g.label}</h4>
+      <ol class="timeline">${g.items.map((l) => `
+        <li class="${fresh.has(l) ? 'fresh' : ''}">
+          <span class="dot">${iconOf(l)}</span>
+          <div class="log-body">
+            <div><b>${esc(l.action)}</b> — ${esc(l.detail)} ${fresh.has(l) ? '<span class="new-tag">NEW</span>' : ''}</div>
+            ${l.changes && l.changes.length ? `<ul class="diff">${l.changes.map((c) => `
+              <li><span class="diff-field">${esc(c.field)}</span>
+                ${c.from ? `<span class="diff-from">${esc(c.from)}</span>` : ''}
+                ${c.from && c.to ? '<span class="arrow">→</span>' : ''}
+                ${c.to ? `<span class="diff-to">${esc(c.to)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+            <div class="muted small"><span class="pill" style="--c:${colorOf(l.by)}">${esc(l.by)}</span>
+              ${new Date(l.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </li>`).join('')}</ol>`).join('');
+  }
+
+  // Opening the tab marks everything as read; the NEW tags stay until you leave it.
+  async function markSeen() {
+    if (!unseen().length) return;
+    try {
+      await api('seen', { method: 'POST' });
+      state.lastSeen = new Date().toISOString();
+      $('#log-badge').hidden = true;
+    } catch {}
   }
 
   /* ------------------------------ password ----------------------------- */
